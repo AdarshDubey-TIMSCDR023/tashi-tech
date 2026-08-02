@@ -33,23 +33,49 @@ export default function Blog() {
         const API_KEY = import.meta.env.VITE_GNEWS_API_KEY
         const API_URL = import.meta.env.VITE_GNEWS_API_URL || 'https://gnews.io/api/v4'
 
+        console.log('API Key exists:', !!API_KEY)
+        console.log('API URL:', API_URL)
+
         if (!API_KEY) {
           throw new Error('GNews API key is missing. Please check your .env file.')
         }
 
-        const response = await fetch(
-          `${API_URL}/top-headlines?category=technology&lang=en&country=us&max=20&apikey=${API_KEY}`
-        )
+        const url = `${API_URL}/top-headlines?category=technology&lang=en&country=us&max=10&apikey=${API_KEY}`
+        console.log('Fetching from URL:', url.replace(API_KEY, 'HIDDEN'))
+
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+        })
+
+        console.log('Response status:', response.status)
+        console.log('Response ok:', response.ok)
 
         if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.errors?.[0]?.message || 'Failed to fetch articles.')
+          let errorMessage = `HTTP error! status: ${response.status}`
+          try {
+            const errorData = await response.json()
+            console.error('Error response:', errorData)
+            errorMessage = errorData.errors?.[0]?.message || errorData.message || errorMessage
+          } catch (e) {
+            console.error('Could not parse error response:', e)
+          }
+          throw new Error(errorMessage)
         }
 
         const data = await response.json()
+        console.log('Data received:', data)
 
-        // Format the response to match our NewsArticle interface
-        const formatted: NewsArticle[] = (data.articles || []).map((article: any) => ({
+        if (!data.articles || data.articles.length === 0) {
+          console.warn('No articles found in response')
+          setArticles([])
+          setError(null)
+          return
+        }
+
+        const formatted: NewsArticle[] = data.articles.map((article: any) => ({
           source: {
             id: null,
             name: article.source?.name || 'GNews',
@@ -63,6 +89,7 @@ export default function Blog() {
           content: article.content || null,
         }))
 
+        console.log('Formatted articles:', formatted.length)
         setArticles(formatted)
         setError(null)
       } catch (err) {
@@ -80,7 +107,6 @@ export default function Blog() {
     loadNews()
   }, [])
 
-  // Format date helper
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -91,6 +117,10 @@ export default function Blog() {
     } catch {
       return 'Recently published'
     }
+  }
+
+  const handleRetry = () => {
+    window.location.reload()
   }
 
   return (
@@ -134,20 +164,37 @@ export default function Blog() {
           )}
 
           {error && !loading && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-              <p className="text-red-600 font-medium">{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Try Again
-              </button>
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center max-w-2xl mx-auto">
+              <p className="text-red-600 font-medium mb-2">Failed to fetch articles</p>
+              <p className="text-red-500 text-sm mb-4">{error}</p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={handleRetry}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                >
+                  Try Again
+                </button>
+                <button
+                  onClick={() => {
+                    setError(null)
+                    setArticles([])
+                    window.location.reload()
+                  }}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium"
+                >
+                  Refresh Page
+                </button>
+              </div>
+              <p className="text-xs text-red-400 mt-4">
+                If the problem persists, please check your internet connection or try again later.
+              </p>
             </div>
           )}
 
           {!loading && !error && articles.length === 0 && (
             <div className="rounded-2xl border border-line bg-white p-8 text-center text-ink/60">
-              <p>No articles are available at the moment. Please check back soon.</p>
+              <p className="text-lg">No articles available</p>
+              <p className="text-sm mt-2">Please check back later for updates.</p>
             </div>
           )}
 
