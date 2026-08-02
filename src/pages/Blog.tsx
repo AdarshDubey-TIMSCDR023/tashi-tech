@@ -259,7 +259,7 @@ export default function Blog() {
   return (
     <>
       <Seo
-        title="Blog | Tashi Tech"
+        title="Blog"
         description="Read the latest insights, product updates, and development tips from Tashi Tech."
         path="/blog"
       />
