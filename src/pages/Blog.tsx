@@ -27,28 +27,51 @@ export default function Blog() {
   useEffect(() => {
     const loadNews = async () => {
       try {
-        const API_KEY = import.meta.env.VITE_NEWS_API_KEY
-        const API_URL = import.meta.env.VITE_NEWS_API_URL || 'https://newsapi.org/v2'
-        
+        setLoading(true)
+        setError(null)
+
+        const API_KEY = import.meta.env.VITE_GNEWS_API_KEY
+        const API_URL = import.meta.env.VITE_GNEWS_API_URL || 'https://gnews.io/api/v4'
+
         if (!API_KEY) {
-          throw new Error('News API key is missing. Please check your .env file.')
+          throw new Error('GNews API key is missing. Please check your .env file.')
         }
 
         const response = await fetch(
-          `${API_URL}/top-headlines?country=us&category=technology&apiKey=${API_KEY}`
+          `${API_URL}/top-headlines?category=technology&lang=en&country=us&max=20&apikey=${API_KEY}`
         )
-        
+
         if (!response.ok) {
           const errorData = await response.json()
-          throw new Error(errorData.message || 'Failed to fetch news')
+          throw new Error(errorData.errors?.[0]?.message || 'Failed to fetch articles.')
         }
-        
+
         const data = await response.json()
-        setArticles(data.articles || [])
+
+        // Format the response to match our NewsArticle interface
+        const formatted: NewsArticle[] = (data.articles || []).map((article: any) => ({
+          source: {
+            id: null,
+            name: article.source?.name || 'GNews',
+          },
+          author: article.source?.name || 'Unknown',
+          title: article.title || 'Untitled article',
+          description: article.description || 'Read more about this update.',
+          url: article.url || '#',
+          urlToImage: article.image || null,
+          publishedAt: article.publishedAt || new Date().toISOString(),
+          content: article.content || null,
+        }))
+
+        setArticles(formatted)
         setError(null)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'We could not load the latest news right now.')
         console.error('Error fetching news:', err)
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'We could not load the latest news right now.'
+        )
       } finally {
         setLoading(false)
       }
@@ -57,11 +80,23 @@ export default function Blog() {
     loadNews()
   }, [])
 
-  // Rest of the component remains the same...
+  // Format date helper
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    } catch {
+      return 'Recently published'
+    }
+  }
+
   return (
     <>
       <Seo
-        title="Blog "
+        title="Blog | Tashi Tech"
         description="Read the latest insights, product updates, and development tips from Tashi Tech."
         path="/blog"
       />
@@ -85,8 +120,9 @@ export default function Blog() {
         <div className="max-w-6xl mx-auto px-6 lg:px-8">
           {loading && (
             <div className="grid gap-6 md:grid-cols-2">
-              {[1, 2, 3, 4].map((i) => (
+              {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div key={i} className="rounded-2xl border border-line bg-white p-7 animate-pulse">
+                  <div className="h-48 w-full bg-mist rounded-xl mb-4" />
                   <div className="h-4 w-24 bg-mist rounded" />
                   <div className="h-6 w-3/4 bg-mist rounded mt-4" />
                   <div className="h-4 w-full bg-mist rounded mt-3" />
@@ -98,14 +134,20 @@ export default function Blog() {
           )}
 
           {error && !loading && (
-            <div className="rounded-2xl border border-line bg-white p-8 text-center text-red-600">
-              {error}
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+              <p className="text-red-600 font-medium">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Try Again
+              </button>
             </div>
           )}
 
           {!loading && !error && articles.length === 0 && (
             <div className="rounded-2xl border border-line bg-white p-8 text-center text-ink/60">
-              No articles are available yet. Please check back soon.
+              <p>No articles are available at the moment. Please check back soon.</p>
             </div>
           )}
 
@@ -130,27 +172,29 @@ export default function Blog() {
                     >
                       <article className="h-full rounded-2xl border border-line bg-white p-7 flex flex-col hover:shadow-lg hover:shadow-brand/5 hover:border-brand/30 transition-all duration-300">
                         {article.urlToImage && (
-                          <div className="w-full h-48 rounded-xl overflow-hidden mb-4 bg-mist">
+                          <div className="w-full h-48 rounded-xl overflow-hidden mb-4 bg-mist flex-shrink-0">
                             <img 
                               src={article.urlToImage} 
                               alt={title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                               loading="lazy"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement
+                                target.style.display = 'none'
+                              }}
                             />
                           </div>
                         )}
                         
-                        <div className="flex items-center gap-2 text-sm text-ink/50">
-                          <CalendarDays size={15} />
-                          <span>
-                            {date
-                              ? new Date(date).toLocaleDateString('en-US', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                })
-                              : 'Recently published'}
-                          </span>
+                        <div className="flex items-center gap-2 text-sm text-ink/50 flex-wrap">
+                          <CalendarDays size={15} className="flex-shrink-0" />
+                          <span>{formatDate(date)}</span>
+                          {article.source?.name && (
+                            <>
+                              <span className="text-ink/30">•</span>
+                              <span className="truncate">{article.source.name}</span>
+                            </>
+                          )}
                         </div>
 
                         <h2 className="mt-4 font-display font-semibold text-2xl text-ink group-hover:text-brand transition-colors line-clamp-2">
@@ -161,18 +205,13 @@ export default function Blog() {
                           {excerpt}
                         </p>
 
-                        <div className="flex items-center gap-4 mt-4">
-                          {author && (
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-xs font-semibold">
-                                {author.charAt(0).toUpperCase()}
-                              </div>
-                              <span className="text-xs text-ink/50">{author}</span>
+                        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-line/50">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center text-brand text-sm font-semibold flex-shrink-0">
+                              {author.charAt(0).toUpperCase()}
                             </div>
-                          )}
-                          {article.source?.name && (
-                            <span className="text-xs text-ink/30">• {article.source.name}</span>
-                          )}
+                            <span className="text-sm text-ink/70 truncate">{author}</span>
+                          </div>
                         </div>
 
                         <div className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-brand group-hover:gap-3 transition-all">
