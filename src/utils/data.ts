@@ -1,9 +1,19 @@
 import {
-  Globe, Smartphone, Palette, Cloud, Brain, Code2,
-  Building2, Users2, ShoppingCart, Plug, Layers, Wrench,
-  Search, Workflow,
+  Globe,
+  Smartphone,
+  Palette,
+  Cloud,
+  Brain,
+  Code2,
+  Building2,
+  Users2,
+  ShoppingCart,
+  Plug,
+  Layers,
+  Wrench,
+  Search,
+  Workflow,
 } from 'lucide-react'
-import type { string } from 'zod'
 
 export const SERVICES = [
   {
