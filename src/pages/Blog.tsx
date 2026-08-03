@@ -83,45 +83,64 @@ const FALLBACK_ARTICLES: NewsArticle[] = [
   }
 ]
 
+// Skeleton loading component
+const ArticleSkeleton = () => {
+  return (
+    <div className="rounded-2xl border border-line bg-white p-7 flex flex-col animate-pulse">
+      {/* Image skeleton */}
+      <div className="w-full h-48 rounded-xl bg-mist mb-4"></div>
+      
+      {/* Date skeleton */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-4 h-4 bg-mist rounded"></div>
+        <div className="w-24 h-4 bg-mist rounded"></div>
+        <div className="w-px h-4 bg-line"></div>
+        <div className="w-20 h-4 bg-mist rounded"></div>
+      </div>
+      
+      {/* Title skeleton */}
+      <div className="w-3/4 h-8 bg-mist rounded mb-3"></div>
+      <div className="w-1/2 h-8 bg-mist rounded mb-4"></div>
+      
+      {/* Description skeleton */}
+      <div className="space-y-2 flex-1">
+        <div className="w-full h-4 bg-mist rounded"></div>
+        <div className="w-11/12 h-4 bg-mist rounded"></div>
+        <div className="w-10/12 h-4 bg-mist rounded"></div>
+      </div>
+      
+      {/* Author skeleton */}
+      <div className="flex items-center gap-3 mt-4 pt-4 border-t border-line/50">
+        <div className="w-8 h-8 rounded-full bg-mist"></div>
+        <div className="w-24 h-4 bg-mist rounded"></div>
+      </div>
+      
+      {/* Read more skeleton */}
+      <div className="mt-6 w-24 h-4 bg-mist rounded"></div>
+    </div>
+  )
+}
+
 export default function Blog() {
   const [articles, setArticles] = useState<NewsArticle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [progress, setProgress] = useState(0)
 
   const fetchNews = async (isManualRefresh: boolean = false) => {
     if (isManualRefresh) {
       setIsRefreshing(true)
     } else {
       setLoading(true)
-      setProgress(0)
     }
     
     setError(null)
 
-    // Simulate slow loading with progress
-    const simulateProgress = () => {
-      let currentProgress = 0
-      const interval = setInterval(() => {
-        // Random increment between 2-8%
-        const increment = Math.floor(Math.random() * 7) + 2
-        currentProgress = Math.min(currentProgress + increment, 90)
-        setProgress(currentProgress)
-        
-        if (currentProgress >= 90) {
-          clearInterval(interval)
-        }
-      }, 300)
-      return interval
-    }
-
-    const progressInterval = simulateProgress()
-
     try {
-      const API_KEY = import.meta.env.VITE_GNEWS_API_KEY
-      const API_URL = import.meta.env.VITE_GNEWS_API_URL || 'https://gnews.io/api/v4'
+      // Get API configuration from environment variables
+      const API_KEY = import.meta.env.VITE_NEWSDATA_API_KEY
+      const API_URL = import.meta.env.VITE_NEWSDATA_API_URL || 'https://newsdata.io/api/1/news'
       
       // Add artificial delay for slow loading effect (2-4 seconds)
       const delay = Math.floor(Math.random() * 2000) + 2000
@@ -133,19 +152,18 @@ export default function Blog() {
         setArticles(FALLBACK_ARTICLES)
         setLastUpdated(new Date())
         setError('API key not configured - showing sample content')
-        setProgress(100)
         return
       }
 
-      // Build URL with parameters
-      const url = new URL(`${API_URL}/top-headlines`)
-      url.searchParams.append('category', 'technology')
-      url.searchParams.append('lang', 'en')
-      url.searchParams.append('country', 'us')
-      url.searchParams.append('max', '10')
+      // Build URL with parameters for NewsData.io
+      const url = new URL(API_URL)
       url.searchParams.append('apikey', API_KEY)
+      url.searchParams.append('category', 'technology')
+      url.searchParams.append('language', 'en')
+      url.searchParams.append('country', 'us')
+      url.searchParams.append('size', '10')
 
-      console.log('Fetching from GNews API:', url.toString())
+      console.log('Fetching from NewsData.io API:', url.toString())
 
       const response = await fetch(url.toString(), {
         method: 'GET',
@@ -160,7 +178,6 @@ export default function Blog() {
         setError('API rate limit reached. Showing sample content.')
         setArticles(FALLBACK_ARTICLES)
         setLastUpdated(new Date())
-        setProgress(100)
         return
       }
 
@@ -171,48 +188,39 @@ export default function Blog() {
       const data = await response.json()
       console.log('API Response:', data)
 
-      // Add another small delay for smooth transition
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      // Check if we have articles
-      if (data.articles && data.articles.length > 0) {
-        // Transform GNews format to our format
-        const formattedArticles: NewsArticle[] = data.articles.map((article: any) => ({
+      // Check if we have articles and status is successful
+      if (data.status === 'success' && data.results && data.results.length > 0) {
+        // Transform NewsData.io format to our format
+        const formattedArticles: NewsArticle[] = data.results.map((article: any) => ({
           source: {
             id: null,
-            name: article.source?.name || 'Tech News'
+            name: article.source_id || 'Tech News'
           },
-          author: article.source?.name || 'Tech Journalist',
+          author: article.creator?.[0] || article.source_id || 'Tech Journalist',
           title: article.title || 'Untitled Article',
-          description: article.description || 'Read more about this technology update.',
-          url: article.url || '#',
-          urlToImage: article.image || null,
-          publishedAt: article.publishedAt || new Date().toISOString(),
+          description: article.description || article.content || 'Read more about this technology update.',
+          url: article.link || '#',
+          urlToImage: article.image_url || article.media_url || null,
+          publishedAt: article.pubDate || new Date().toISOString(),
           content: article.content || null,
         }))
 
         setArticles(formattedArticles)
         setLastUpdated(new Date())
         setError(null)
-        setProgress(100)
       } else {
-        // No articles in response
+        // No articles in response or API error
         setArticles(FALLBACK_ARTICLES)
         setLastUpdated(new Date())
-        setError('No articles available from API. Showing sample content.')
-        setProgress(100)
+        setError(data.message || 'No articles available from API. Showing sample content.')
       }
 
     } catch (err) {
       console.error('Error fetching news:', err)
-      // Add a small delay before showing error
-      await new Promise(resolve => setTimeout(resolve, 500))
       setArticles(FALLBACK_ARTICLES)
       setLastUpdated(new Date())
       setError('Could not fetch news. Showing sample content.')
-      setProgress(100)
     } finally {
-      clearInterval(progressInterval)
       if (isManualRefresh) {
         setTimeout(() => {
           setIsRefreshing(false)
@@ -290,7 +298,7 @@ export default function Blog() {
                   <span>Updated {formatTimeAgo(lastUpdated)}</span>
                 </>
               )}
-              {articles.length > 0 && (
+              {articles.length > 0 && !loading && (
                 <>
                   <span className="w-px h-4 bg-line" />
                   <span>{articles.length} articles</span>
@@ -308,34 +316,6 @@ export default function Blog() {
             </button>
           </div>
 
-          {/* Loading State with Progress Bar */}
-          {loading && (
-            <div className="mb-8">
-              <div className="rounded-2xl border border-line bg-white p-8 text-center">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-mist border-t-brand rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-sm font-medium text-brand">{progress}%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-ink font-medium">Loading articles...</p>
-                    <p className="text-sm text-ink/50 mt-1">Fetching the latest tech news</p>
-                  </div>
-                  <div className="w-full max-w-md">
-                    <div className="w-full bg-mist rounded-full h-2 overflow-hidden">
-                      <div 
-                        className="bg-brand h-2 rounded-full transition-all duration-300 ease-out"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Error Message */}
           {error && !loading && (
             <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-6 text-center max-w-2xl mx-auto mb-8">
@@ -347,10 +327,16 @@ export default function Blog() {
             </div>
           )}
 
-          {/* Articles Grid */}
-          {!loading && articles.length > 0 && (
-            <div className="grid gap-6 md:grid-cols-2">
-              {articles.map((article, index) => {
+          {/* Articles Grid with Skeleton Loading */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {loading ? (
+              // Show skeletons while loading
+              Array.from({ length: 6 }).map((_, index) => (
+                <ArticleSkeleton key={`skeleton-${index}`} />
+              ))
+            ) : (
+              // Show articles when loaded
+              articles.map((article, index) => {
                 const title = article.title || 'Untitled article'
                 const excerpt = article.description || 'Read more about this update.'
                 const date = article.publishedAt || ''
@@ -416,9 +402,9 @@ export default function Blog() {
                     </Link>
                   </Reveal>
                 )
-              })}
-            </div>
-          )}
+              })
+            )}
+          </div>
         </div>
       </section>
     </>
